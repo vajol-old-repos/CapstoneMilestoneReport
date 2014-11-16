@@ -1,0 +1,362 @@
+---
+title: "Capstone Milestone Report"
+author: "Vajo Lukic"
+date: "Sunday, November 16, 2014"
+output: html_document
+---
+
+Summary
+==============================================================================================
+
+The goal of this project is just to display that we've gotten used to working with the data and that we're on track to create our prediction algorithm. This document concisely explains only the major features of the data we have identified and briefly summarizes our plans for creating the prediction algorithm and Shiny app. It also illustrates important observations of the data set.
+
+
+Loading the data
+--------------------------------------------------------------
+Load libraries used for this report
+```{r, eval=FALSE }
+library(tm) 
+library(stringi)
+library(SnowballC)
+library(ggplot2)
+```
+
+Set working directory
+```{r, eval=FALSE }
+setwd("c:\\")
+if (!file.exists("tmp")) {
+  dir.create("tmp")
+}
+setwd("c:\\tmp")
+```
+
+Set URL for download Swiftkey file
+```{r, eval=FALSE }
+fileUrl <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+```
+
+Set file name for the Swiftkey file download
+```{r, eval=FALSE }
+fileName <- "Coursera-SwiftKey.zip"
+```
+
+Download the Swiftkey file
+```{r, eval=FALSE }
+download.file(fileUrl, destfile=fileName)
+```
+
+Document when the file has been downloaded
+```{r, eval=FALSE }
+dateDownloaded <- date()
+dateDownloaded
+[1] "Sun Nov 16 10:00:27 2014"
+```
+
+Unzip the Swiftkey file
+```{r, eval=FALSE }
+unzip(fileName, exdir = "c:/tmp")
+```
+
+Set the folder from where to read all the en_US files 
+```{r, eval=FALSE }
+fileDir <- file.path("c:/tmp", "final", "en_US")
+fileDir
+[1] "c:/tmp/final/en_US"
+```
+
+Examine contents of the folder
+```{r, eval=FALSE }
+dir(fileDir)
+[1] "en_US.blogs.txt"   "en_US.news.txt"    "en_US.twitter.txt"
+```
+
+Read blogs file
+```{r, eval=FALSE }
+con <- file("c:/tmp/final/en_US/en_US.blogs.txt", open = "rb")
+blogs <- readLines(con, encoding="latin1")
+close(con)
+```
+
+Read news file
+```{r, eval=FALSE }
+con <- file("c:/tmp/final/en_US/en_US.news.txt", open = "rb")
+news <- readLines(con, encoding="latin1")
+close(con)
+```
+
+Read twitter file
+```{r, eval=FALSE }
+con <- file("c:/tmp/final/en_US/en_US.twitter.txt", open = "rb")
+tweets <- readLines(con, encoding="latin1")
+close(con)
+```
+
+Analyzing the data
+--------------------------------------------------------------
+
+Investigate the size of Blogs file
+```{r, eval=FALSE }
+length(blogs)
+[1] 899288
+object.size(blogs)
+260564320 bytes
+```
+
+Investigate the size of News file
+```{r, eval=FALSE }
+length(news)
+[1] 1010242
+object.size(news)
+20111392 bytes
+```
+
+Investigate the size of Twitter file
+```{r, eval=FALSE }
+length(tweets)
+[1] 2360148
+object.size(tweets)
+316037344 bytes
+```
+
+Investigate number of words in Blogs file
+```{r, eval=FALSE }
+## Join the elements of a character vector into one string
+blogString <- stri_flatten(blogs, collapse =" ")
+
+## Extracts all words from the string
+blogWords <- unlist(stri_extract_words(blogString, locale = "en"))
+
+## Transform strings to lower case to identify unique words correctly
+blogWords <- stri_trans_tolower(blogWords, locale = "en")
+
+## Total number of words in blogs 
+bwordsNum <- length(blogWords)
+bwordsNum
+[1] 37541795
+
+## Unique number of words in blogs  
+ubwordsNum <- length(unique(blogWords))
+ubwordsNum
+[1] 318959
+
+```
+
+Investigate number of words in News file
+```{r, eval=FALSE }
+## Join the elements of a character vector into one string
+newsString <- stri_flatten(news, collapse =" ")
+
+## Extracts all words from the string
+newsWords <- unlist(stri_extract_words(newsString, locale = "en"))
+
+## Transform strings to lower case to identify unique words correctly
+newsWords <- stri_trans_tolower(newsWords, locale = "en")
+
+## Total number of words in news 
+nwordsNum <- length(newsWords)
+nwordsNum
+[1] 34762303
+
+## Unique number of words in news  
+unwordsNum <- length(unique(newsWords))
+unwordsNum
+[1] 284463
+```
+
+Investigate number of words in Twitter file
+```{r, eval=FALSE }
+## Join the elements of a character vector into one string
+tweetString <- stri_flatten(tweets, collapse =" ")
+
+## Extracts all words from the string
+tweetWords <- unlist(stri_extract_words(tweetString, locale = "en"))
+
+## Transform strings to lower case to identify unique words correctly
+tweetWords <- stri_trans_tolower(tweetWords, locale = "en")
+
+## Total number of words in tweets
+twordsNum <- length(tweetWords)
+twordsNum
+[1] 30092866
+
+## Unique number of words in tweets 
+utwordsNum <- length(unique(tweetWords))
+utwordsNum
+[1] 370101
+```
+
+Creating sample of the data
+--------------------------------------------------------------
+To make further data processing easier and faster, I've created a random sample of the data by selecting 10000 rows from each file.
+
+Load all data files and create samples
+```{r, eval=FALSE }
+crps <- Corpus(DirSource(directory="c:/tmp/final/en_US", enco ding = "latin1"), readerControl = list(reader=readPlain, language="en_US"))
+
+## Set seed to provide reproducability of results
+set.seed(3523)
+crps[[1]] <- sample(crps[[1]], 10000)
+crps[[2]] <- sample(crps[[2]], 10000)
+crps[[3]] <- sample(crps[[3]], 10000)
+length(crps[[1]])
+[1] 10000
+length(crps[[2]])
+[1] 10000
+length(crps[[3]])
+[1] 10000
+
+```
+
+Performing tokenization and profanity filtering
+-------------------------------------------------
+
+```{r, eval=FALSE }
+## Remove punctuation from corpus
+cleanCrps <- tm_map(crps, removePunctuation)
+
+## Remove numbers from corpus
+cleanCrps <- tm_map(cleanCrps, removeNumbers)
+
+## Convert all to lowercase
+cleanCrps <- tm_map(cleanCrps, tolower)
+
+## Remove whitespaces from corpus
+cleanCrps <- tm_map(cleanCrps, stripWhitespace)
+
+## Remove stopwords from corpus
+cleanCrps <- tm_map(cleanCrps, removeWords, stopwords("english"))
+```
+
+Filter out curse words and profanities
+```{r, eval=FALSE }
+## Set URL for downloading profanity words list
+fileUrl <- "http://www.bannedwordlist.com/lists/swearWords.txt"
+
+## Set file name for the curse words file download
+fileName <- "c:/tmp/swearWords.txt"
+
+## Download the curse words file
+download.file(fileUrl, destfile=fileName)
+
+## Document when the file has been downloaded
+dateDownloaded <- date()
+dateDownloaded
+[1] "Sun Nov 16 12:23:17 2014"
+
+## Load curse words into variable
+curseWords <- read.table("c:/tmp/swearWords.txt")
+
+## Remove profanities from corpus
+cleanCrps <- tm_map(cleanCrps, removeWords, curseWords)
+
+cleanCrps <- Corpus(VectorSource(cleanCrps))
+```
+
+Performing words frequency analysis
+-------------------------------------------------
+
+Create Term Document Matrix
+```{r, eval=FALSE }
+tdm <- TermDocumentMatrix(cleanCrps)
+```
+
+Find 20 most frequently used words
+```{r, eval=FALSE }
+wordFreq <- findFreqTerms(tdm, lowfreq=500)
+head(wordFreq, 20)
+[1] "also"  "and"   "back"  "but"   "can"   "day"   "even"  "first" "get"   "going" "good"  "just"  "know"  "last" 
+[15] "like"  "made"  "make"  "many"  "may"   "much"
+```
+
+Create document term matrix for blogs
+```{r, eval=FALSE }
+bdtm <- DocumentTermMatrix(VCorpus(VectorSource(cleanCrps[[1]])))
+## Find a frequency of words for blogs dtm and sort it in descending order
+bfreq <- sort(colSums(as.matrix(bdtm)), decreasing=TRUE)
+head(bfreq)
+## the  one will just  can like 
+## 2090 1399 1213 1140 1124 1087
+
+```
+
+Create a data frame from blogs words and their frequencies
+```{r, eval=FALSE }
+bwf <- data.frame(word = names(bfreq), freq = bfreq)
+## Create subset of words with a frequency greater than 550
+bswf <- subset(bwf, freq > 550)
+```
+
+Draw a plot for blogs words and their frequencies 
+```{r, eval=FALSE }
+ggplot(bswf, aes(x=word, y=freq), ) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+Blogs words and their frequencies
+![Blogs words and their frequencies](c:\tmp\Capstone_pics\Blogwf.png?raw=true)
+
+Create document term matrix for news
+```{r, eval=FALSE }
+ndtm <- DocumentTermMatrix(VCorpus(VectorSource(cleanCrps[[2]])))
+## Find a frequency of words for news dtm and sort it in descending order
+nfreq <- sort(colSums(as.matrix(ndtm)), decreasing=TRUE)
+head(nfreq)
+## the said will  one  new also 
+## 2466 2461 1105  837  688  571
+```
+
+Create a data frame from news words and their frequencies
+```{r, eval=FALSE }
+nwf <- data.frame(word = names(nfreq), freq = nfreq)
+## Create subset of words with a frequency greater than 550
+nswf <- subset(nwf, freq > 300)
+```
+
+Show a plot of words from news and their frequencies 
+```{r, eval=FALSE }
+ggplot(nswf, aes(x=word, y=freq), ) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+News words and their frequencies
+![News words and their frequencies](c:\tmp\Capstone_pics\Newswf.png?raw=true)
+
+Create document term matrix for tweets
+```{r, eval=FALSE }
+tdtm <- DocumentTermMatrix(VCorpus(VectorSource(cleanCrps[[3]])))
+## Find a frequency of words for tweets dtm and sort it in descending order
+tfreq <- sort(colSums(as.matrix(tdtm)), decreasing=TRUE)
+head(tfreq)
+## just like love  get  the good 
+## 650  537  458  445  434  421
+```
+
+Create a data frame from tweet words and their frequencies
+```{r, eval=FALSE }
+twf <- data.frame(word = names(tfreq), freq = tfreq)
+## Create subset of words with a frequency greater than 550
+tswf <- subset(twf, freq > 200)
+
+```
+
+Show a plot of words from tweets and theor frequencies 
+```{r, eval=FALSE }
+ggplot(tswf, aes(x=word, y=freq), ) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+
+```
+
+Tweets words and their frequencies
+![Tweets words and their frequencies](c:\tmp\Capstone_pics\Tweetwf.png?raw=true)
+
+Future steps and plans for creating a prediction algorithm and Shiny app
+-------------------------------------------------------------------------
+
+* Study materials about NLP, TM package and RWeka package, to learn how to create N-grams
+* Create prediction models, test them, evaluate them and optimize them
+* Create the Shiny application and its presentation
+
+
